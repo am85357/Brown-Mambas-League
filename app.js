@@ -90,19 +90,20 @@ function renderSchedule(){
     ...leagueData.games.map(g=>String(g.week||"1"))
   ])].sort((a,b)=>Number(a)-Number(b));
   const select=$("week-select"), old=select.value;
-  select.innerHTML=weeks.map(w=>`<option value="${safe(w)}">Week ${safe(w)}</option>`).join("");
-  if(weeks.includes(old))select.value=old;
-  const week=select.value||weeks[0];
-  const games=leagueData.games.filter(g=>String(g.week||"1")===week);
-  $("schedule-list").innerHTML=games.length?games.map(g=>{
+  select.innerHTML='<option value="all">Full Season</option>'+weeks.map(w=>`<option value="${safe(w)}">Week ${safe(w)}</option>`).join("");
+  if(old==="all"||weeks.includes(old))select.value=old;
+  const week=select.value||"all";
+  const games=leagueData.games.filter(g=>week==="all"||String(g.week||"1")===week).sort((a,b)=>Number(a.week||1)-Number(b.week||1)||String(a.date||"").localeCompare(String(b.date||"")));
+  $("schedule-list").innerHTML=games.length?games.map((g,i)=>{
+    const heading=week==="all"&&(i===0||String(g.week||1)!==String(games[i-1].week||1))?`<div class="week-label">WEEK ${safe(g.week||1)}</div>`:"";
     const final=(g.status||"").toLowerCase()==="final";
     const score=final?`${number(g.home_score)} – ${number(g.away_score)}`:"VS";
-    return `<section class="game-with-volunteers"><article class="game-card" data-game="${safe(g.game_id)}" tabindex="0" role="button" aria-label="View ${safe(g.home_team)} versus ${safe(g.away_team)} box score">
+    return `${heading}<section class="game-with-volunteers"><article class="game-card" data-game="${safe(g.game_id)}" tabindex="0" role="button" aria-label="View ${safe(g.home_team)} versus ${safe(g.away_team)} box score">
       <div class="game-date"><strong>${safe(dateLabel(g.date))}</strong>${safe(g.time||"Time TBD")}</div>
       <div class="matchup"><span class="team-name">${safe(g.home_team)}${scheduleRecord(g.home_team)}</span><span class="versus">VS</span><span class="team-name">${safe(g.away_team)}${scheduleRecord(g.away_team)}</span></div>
       <div class="game-result"><strong>${safe(score)}</strong><span class="status-tag ${final?"":"upcoming"}">${safe(g.status||"Scheduled")}</span></div>
     </article>${volunteerForm(g)}</section>`;
-  }).join(""):`<div class="empty-state">No games entered for this week yet.<br>Add games to the <strong>Games</strong> tab in your spreadsheet.</div>`;
+  }).join(""):`<div class="empty-state">No games entered for ${week==="all"?"this season":"this week"} yet.<br>Add games to the <strong>Games</strong> tab in your spreadsheet.</div>`;
   document.querySelectorAll(".volunteer-form").forEach(form=>form.addEventListener("submit",saveVolunteers));
   document.querySelectorAll(".game-card").forEach(card=>{card.addEventListener("click",()=>openGame(card.dataset.game));card.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openGame(card.dataset.game)}})});
 }
