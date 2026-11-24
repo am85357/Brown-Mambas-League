@@ -56,15 +56,18 @@ function renderSummary(players){
 const volunteerRoles = {ref1:"Ref 1",ref2:"Ref 2",scorekeeper:"Scorekeeper",statskeeper:"Stats Keeper"};
 function volunteerForm(g){
   const filled=Object.keys(volunteerRoles).filter(k=>g[k]).length;
-  return `<form class="volunteer-form" data-game="${safe(g.game_id)}"><div class="volunteer-heading"><strong>Volunteer signups</strong><span>${filled}/4 filled</span></div><div class="volunteer-fields">${Object.entries(volunteerRoles).map(([key,label])=>`<label>${label}${g[key]?`<span class="volunteer-filled">${safe(g[key])}</span>`:`<input name="${key}" placeholder="Enter name" maxlength="80" ${config.signupUrl?"":"disabled"}>`}</label>`).join("")}</div><div class="volunteer-actions"><button type="submit" ${filled===4||!config.signupUrl?"disabled":""}>Save signups</button><span role="status">${config.signupUrl?"Anyone can volunteer.":"Signups not connected yet."}</span></div></form>`;
+  return `<form class="volunteer-form" data-game="${safe(g.game_id)}"><div class="volunteer-heading"><strong>Volunteer signups</strong><span>${filled}/4 filled</span></div><div class="volunteer-fields">${Object.entries(volunteerRoles).map(([key,label])=>`<label>${label}${`<input name="${key}" value="${safe(g[key]||"")}" placeholder="Enter Name" maxlength="80" ${config.signupUrl?"":"disabled"}>`}</label>`).join("")}</div><div class="volunteer-actions"><button type="submit" ${!config.signupUrl?"disabled":""}>Save signups</button><span role="status">${config.signupUrl?"Edit or clear a name, then save.":"Signups not connected yet."}</span></div></form>`;
 }
 async function saveVolunteers(event){
   event.preventDefault(); const form=event.currentTarget, button=form.querySelector("button"), status=form.querySelector('[role="status"]');
-  const names=Object.fromEntries([...new FormData(form)].map(([k,v])=>[k,v.trim()]).filter(([k,v])=>v));
-  if(!Object.keys(names).length){status.textContent="Enter at least one name.";return;}
+  const g=leagueData.games.find(x=>x.game_id===form.dataset.game); if(!g)return;
+  const names=Object.fromEntries([...new FormData(form)].map(([k,v])=>[k,v.trim()]).filter(([k,v])=>v!==(g[k]||"")));
+  const expected=Object.fromEntries(Object.keys(names).map(k=>[k,g[k]||""]));
+  if(!Object.keys(names).length){status.textContent="No changes to save.";return;}
+  if(Object.keys(names).some(k=>expected[k]&&!names[k])&&!confirm("Remove the selected volunteer signup(s)?"))return;
   button.disabled=true;status.textContent="Saving…";
   try{
-    const response=await fetch(config.signupUrl,{method:"POST",body:new URLSearchParams({game_id:form.dataset.game,names:JSON.stringify(names)})});
+    const response=await fetch(config.signupUrl,{method:"POST",body:new URLSearchParams({game_id:form.dataset.game,names:JSON.stringify(names),expected:JSON.stringify(expected)})});
     if(!response.ok)throw new Error(); const result=await response.json();
     if(result.game){const g=leagueData.games.find(x=>x.game_id===form.dataset.game);if(g)Object.assign(g,result.game);}
     if(!result.ok){if(result.game){renderSchedule();const updated=[...document.querySelectorAll('.volunteer-form')].find(f=>f.dataset.game===form.dataset.game);if(updated)updated.querySelector('[role="status"]').textContent=result.error;}else status.textContent=result.error;return;}
