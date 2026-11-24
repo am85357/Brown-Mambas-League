@@ -117,8 +117,50 @@ function renderLeaders(){
   $("points-leaders").innerHTML=leaderRows([...p].sort((a,b)=>b.points-a.points),"points","PTS");
   $("rebound-leaders").innerHTML=leaderRows([...p].sort((a,b)=>b.rebounds-a.rebounds),"rebounds","REB");
 }
+let selectedTeam = null;
+let rosterError = "";
+const normalized = v => String(v ?? "").trim().toLowerCase();
+function teamMatches(value,t){return !!normalized(value) && [t.team_id,t.team_name].some(v=>normalized(v)===normalized(value));}
+function teamRoster(t){
+  const map=new Map();
+  (leagueData.rosters||[]).filter(r=>teamMatches(r.team_id,t)&&r.player_name).forEach(r=>{
+    map.set(normalized(r.player_name),{player:r.player_name,captain:["yes","true","1","y"].includes(normalized(r.captain)),games:new Set(),points:0,rebounds:0});
+  });
+  leagueData.playerStats.filter(s=>teamMatches(s.team_name,t)&&s.player_name&&s.game_id).forEach(s=>{
+    const key=normalized(s.player_name);
+    if(!map.has(key))map.set(key,{player:s.player_name,captain:false,games:new Set(),points:0,rebounds:0});
+    const p=map.get(key);p.games.add(s.game_id);p.points+=number(s.points);p.rebounds+=number(s.rebounds);
+  });
+  return [...map.values()].map(p=>({...p,gp:p.games.size,ppg:p.games.size?p.points/p.games.size:0,rpg:p.games.size?p.rebounds/p.games.size:0}));
+}
+function teamRecord(t){
+  let wins=0,losses=0,ties=0,points=0,gp=0;
+  leagueData.games.filter(g=>normalized(g.status)==="final"&&String(g.home_score??"").trim()!==""&&String(g.away_score??"").trim()!=="").forEach(g=>{
+    const home=teamMatches(g.home_team,t);if(!home&&!teamMatches(g.away_team,t))return;
+    const own=number(home?g.home_score:g.away_score),other=number(home?g.away_score:g.home_score);
+    gp++;points+=own;if(own>other)wins++;else if(own<other)losses++;else ties++;
+  });
+  return {record:`${wins}–${losses}${ties?`–${ties}`:""}`,ppg:gp?points/gp:0};
+}
 function renderTeams(){
-  $("teams-grid").innerHTML=leagueData.teams.map(t=>`<article class="team-card"><h3><span class="team-dot" style="background:${safe(t.color||"#f28b36")}"></span>${safe(t.team_name)}</h3><p>Team roster and season stats are calculated from recorded game performances.</p></article>`).join("")||`<div class="empty-state">Add your six teams to the Teams tab.</div>`;
+  if(!leagueData.teams.some(t=>t.team_id===selectedTeam))selectedTeam=leagueData.teams[0]?.team_id??null;
+  $("teams-grid").innerHTML=leagueData.teams.map(t=>{
+    const color=/^#[0-9a-f]{6}$/i.test(t.color||"")?t.color:"#f28b36";
+    const roster=teamRoster(t),record=teamRecord(t);
+    return `<button type="button" class="team-card roster-card" data-team="${safe(t.team_id)}" aria-pressed="${t.team_id===selectedTeam}" aria-controls="team-details"><span class="roster-card-title"><span class="team-dot" style="background:${color}"></span>${safe(t.team_name)}</span><span>${roster.length} players · ${record.record} record</span><span class="roster-preview">${roster.map(p=>safe(p.player)+(p.captain?" (C)":"")).join(" · ")||"Roster not entered yet"}</span><span class="roster-link">View season stats →</span></button>`;
+  }).join("")||`<div class="empty-state">Add your six teams to the Teams tab.</div>`;
+  document.querySelectorAll(".roster-card").forEach(btn=>btn.addEventListener("click",()=>{selectedTeam=btn.dataset.team;document.querySelectorAll(".roster-card").forEach(b=>b.setAttribute("aria-pressed",String(b===btn)));renderTeamDetails();}));
+  renderTeamDetails();
+}
+function renderTeamDetails(){
+  const t=leagueData.teams.find(t=>t.team_id===selectedTeam), panel=$("team-details");
+  panel.hidden=!t;if(!t)return;
+  const record=teamRecord(t),rows=teamRoster(t),sort=$("roster-sort").value;
+  rows.sort((a,b)=>sort==="name"?Number(b.captain)-Number(a.captain)||a.player.localeCompare(b.player):b[sort]-a[sort]||a.player.localeCompare(b.player));
+  $("roster-title").textContent=t.team_name;
+  $("roster-record").textContent=record.record;$("roster-count").textContent=rows.length;$("roster-ppg").textContent=record.ppg.toFixed(1);
+  $("roster-status").textContent=rosterError;
+  $("roster-body").innerHTML=rows.map(p=>`<tr><td>${safe(p.player)} ${p.captain?'<span class="captain-tag">Captain</span>':""}</td><td class="num">${p.gp}</td><td class="num">${p.points}</td><td class="num">${p.rebounds}</td><td class="num">${p.ppg.toFixed(1)}</td><td class="num">${p.rpg.toFixed(1)}</td></tr>`).join("")||'<tr><td colspan="6">No roster entries yet.</td></tr>';
 }
 function openGame(id){
   const g=leagueData.games.find(x=>x.game_id===id);if(!g)return;
@@ -152,6 +194,9 @@ async function init(){
     $("data-status").className="data-status error";
     leagueData=DEMO;
   }
+  if(config.rostersCsvUrl){
+    try{leagueData.rosters=await getSheet(config.rostersCsvUrl,[]);}catch(err){rosterError="Could not load Rosters. Showing players from recorded stats only.";}
+  }else{rosterError="Rosters CSV not configured. Showing players from recorded stats only.";}
   await refreshVolunteers();
   const players=totals();renderSummary(players);renderSchedule();renderPlayers();renderLeaders();renderTeams();
 }
@@ -164,4 +209,5 @@ $("player-search").addEventListener("input",renderPlayers);
 $("player-sort").addEventListener("change",renderPlayers);
 $("close-dialog").addEventListener("click",()=>$("game-dialog").close());
 $("game-dialog").addEventListener("click",e=>{if(e.target===$("game-dialog"))$("game-dialog").close()});
+$("roster-sort").addEventListener("change",renderTeamDetails);
 init();

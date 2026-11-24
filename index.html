@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#10243a">
   <title>League Central | Basketball League</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=teams1">
 </head>
 <body>
   <header class="site-header">
@@ -79,6 +79,13 @@
     <section class="view" id="view-teams">
       <div class="section-heading"><div><p class="eyebrow">SIX TEAMS. ONE LEAGUE.</p><h2>Teams</h2></div></div>
       <div id="teams-grid" class="teams-grid"></div>
+      <section id="team-details" class="team-details" hidden>
+        <div class="section-heading"><div><p class="eyebrow">ROSTER &amp; SEASON STATISTICS</p><h2 id="roster-title"></h2></div></div>
+        <div class="summary-grid"><article class="summary-card"><span class="summary-label">RECORD</span><strong id="roster-record"></strong></article><article class="summary-card"><span class="summary-label">PLAYERS</span><strong id="roster-count"></strong></article><article class="summary-card"><span class="summary-label">TEAM PPG</span><strong id="roster-ppg"></strong></article></div>
+        <p id="roster-status" class="data-status error" role="status"></p>
+        <div class="table-tools"><label class="select-wrap">Sort players <select id="roster-sort"><option value="name">Captain / name</option><option value="gp">Games played</option><option value="points">Total points</option><option value="rebounds">Total rebounds</option><option value="ppg">Points per game</option><option value="rpg">Rebounds per game</option></select></label></div>
+        <div class="table-wrap"><table><thead><tr><th>PLAYER</th><th>GP</th><th>PTS</th><th>REB</th><th>PPG</th><th>RPG</th></tr></thead><tbody id="roster-body"></tbody></table></div>
+      </section>
     </section>
   </main>
 
@@ -93,7 +100,7 @@
     </div>
   </dialog>
 
-  <script src="config.js"></script>
-  <script src="app.js"></script>
+  <script src="config.js?v=teams1"></script>
+  <script src="app.js?v=teams1"></script>
 </body>
 </html>
