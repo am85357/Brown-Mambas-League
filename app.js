@@ -53,6 +53,29 @@ function renderSummary(players){
   $("games-played").textContent=leagueData.games.filter(g=>(g.status||"").toLowerCase()==="final").length;
   $("player-count").textContent=players.length;
 }
+const volunteerRoles = {ref1:"Ref 1",ref2:"Ref 2",scorekeeper:"Scorekeeper",statskeeper:"Stats Keeper"};
+function volunteerForm(g){
+  const filled=Object.keys(volunteerRoles).filter(k=>g[k]).length;
+  return `<form class="volunteer-form" data-game="${safe(g.game_id)}"><div class="volunteer-heading"><strong>Volunteer signups</strong><span>${filled}/4 filled</span></div><div class="volunteer-fields">${Object.entries(volunteerRoles).map(([key,label])=>`<label>${label}${g[key]?`<span class="volunteer-filled">${safe(g[key])}</span>`:`<input name="${key}" placeholder="Enter full name" maxlength="80" ${config.signupUrl?"":"disabled"}>`}</label>`).join("")}</div><div class="volunteer-actions"><button type="submit" ${filled===4||!config.signupUrl?"disabled":""}>Save signups</button><span role="status">${config.signupUrl?"Anyone can volunteer.":"Signups not connected yet."}</span></div></form>`;
+}
+async function saveVolunteers(event){
+  event.preventDefault(); const form=event.currentTarget, button=form.querySelector("button"), status=form.querySelector('[role="status"]');
+  const names=Object.fromEntries([...new FormData(form)].map(([k,v])=>[k,v.trim()]).filter(([k,v])=>v));
+  if(!Object.keys(names).length){status.textContent="Enter at least one name.";return;}
+  button.disabled=true;status.textContent="Saving…";
+  try{
+    const response=await fetch(config.signupUrl,{method:"POST",body:new URLSearchParams({game_id:form.dataset.game,names:JSON.stringify(names)})});
+    if(!response.ok)throw new Error(); const result=await response.json();
+    if(result.game){const g=leagueData.games.find(x=>x.game_id===form.dataset.game);if(g)Object.assign(g,result.game);}
+    if(!result.ok){if(result.game){renderSchedule();const updated=[...document.querySelectorAll('.volunteer-form')].find(f=>f.dataset.game===form.dataset.game);if(updated)updated.querySelector('[role="status"]').textContent=result.error;}else status.textContent=result.error;return;}
+    renderSchedule();const updated=[...document.querySelectorAll('.volunteer-form')].find(f=>f.dataset.game===form.dataset.game);if(updated)updated.querySelector('[role="status"]').textContent="Signups saved!";
+  }catch(e){status.textContent="Could not confirm saving. Refresh before retrying.";}finally{button.disabled=false;}
+}
+async function refreshVolunteers(){
+  if(!config.signupUrl)return;
+  try{const r=await fetch(config.signupUrl,{cache:"no-store"});const data=await r.json();if(!data.ok)throw new Error();leagueData.games.forEach(g=>{if(data.games[g.game_id])Object.assign(g,data.games[g.game_id]);});}catch(e){console.warn("Could not refresh volunteer assignments",e);}
+}
+
 function renderSchedule(){
   const configuredWeeks = Number(config.seasonWeeks) || 12;
   const weeks=[...new Set([
@@ -67,12 +90,13 @@ function renderSchedule(){
   $("schedule-list").innerHTML=games.length?games.map(g=>{
     const final=(g.status||"").toLowerCase()==="final";
     const score=final?`${number(g.home_score)} – ${number(g.away_score)}`:"VS";
-    return `<article class="game-card" data-game="${safe(g.game_id)}" tabindex="0" role="button" aria-label="View ${safe(g.home_team)} versus ${safe(g.away_team)} box score">
+    return `<section class="game-with-volunteers"><article class="game-card" data-game="${safe(g.game_id)}" tabindex="0" role="button" aria-label="View ${safe(g.home_team)} versus ${safe(g.away_team)} box score">
       <div class="game-date"><strong>${safe(dateLabel(g.date))}</strong>${safe(g.time||"Time TBD")}</div>
       <div class="matchup"><span class="team-name">${safe(g.home_team)}</span><span class="versus">VS</span><span class="team-name">${safe(g.away_team)}</span></div>
       <div class="game-result"><strong>${safe(score)}</strong><span class="status-tag ${final?"":"upcoming"}">${safe(g.status||"Scheduled")}</span></div>
-    </article>`;
+    </article>${volunteerForm(g)}</section>`;
   }).join(""):`<div class="empty-state">No games entered for this week yet.<br>Add games to the <strong>Games</strong> tab in your spreadsheet.</div>`;
+  document.querySelectorAll(".volunteer-form").forEach(form=>form.addEventListener("submit",saveVolunteers));
   document.querySelectorAll(".game-card").forEach(card=>{card.addEventListener("click",()=>openGame(card.dataset.game));card.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openGame(card.dataset.game)}})});
 }
 function renderPlayers(){
@@ -125,6 +149,7 @@ async function init(){
     $("data-status").className="data-status error";
     leagueData=DEMO;
   }
+  await refreshVolunteers();
   const players=totals();renderSummary(players);renderSchedule();renderPlayers();renderLeaders();renderTeams();
 }
 document.querySelectorAll(".nav-button").forEach(btn=>btn.addEventListener("click",()=>{
