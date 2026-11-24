@@ -6,6 +6,9 @@
   <meta name="theme-color" content="#10243a">
   <title>League Central | Basketball League</title>
   <link rel="stylesheet" href="styles.css?v=teams1">
+  <style>
+    .schedule-record { font-size: .65em; font-weight: 600; color: var(--muted); white-space: nowrap; }
+  </style>
 </head>
 <body>
   <header class="site-header">
@@ -36,6 +39,7 @@
 
     <nav class="main-nav" aria-label="Main navigation">
       <button class="nav-button active" data-view="schedule">Schedule</button>
+      <button class="nav-button" data-view="standings">Standings</button>
       <button class="nav-button" data-view="players">Player Stats</button>
       <button class="nav-button" data-view="leaders">Stat Leaders</button>
       <button class="nav-button" data-view="teams">Teams</button>
@@ -51,6 +55,12 @@
         </label>
       </div>
       <div id="schedule-list" class="schedule-list"></div>
+    </section>
+
+    <section class="view" id="view-standings">
+      <div class="section-heading"><div><p class="eyebrow">SEASON RECORDS</p><h2>League standings</h2></div></div>
+      <div class="table-wrap"><table><thead><tr><th>RK</th><th>TEAM</th><th>GP</th><th>W</th><th>L</th><th>T</th><th>WIN %</th><th>PF</th><th>PA</th><th>DIFF</th></tr></thead><tbody id="standings-body"></tbody></table></div>
+      <p class="data-status" style="margin:12px 0">Final games only. Ranked by winning percentage, then point differential. Ties count as half a win.</p>
     </section>
 
     <section class="view" id="view-players">
@@ -73,13 +83,15 @@
       <div class="leader-grid">
         <article class="leader-panel"><div class="panel-title"><span class="panel-icon">🔥</span><div><h3>Scoring leaders</h3><p>Most total points</p></div></div><div id="points-leaders"></div></article>
         <article class="leader-panel"><div class="panel-title"><span class="panel-icon">💪</span><div><h3>Rebounding leaders</h3><p>Most total rebounds</p></div></div><div id="rebound-leaders"></div></article>
+        <article class="leader-panel"><div class="panel-title"><span class="panel-icon">🏀</span><div><h3>Points per game</h3><p>Highest scoring average</p></div></div><div id="ppg-leaders"></div></article>
+        <article class="leader-panel"><div class="panel-title"><span class="panel-icon">📊</span><div><h3>Rebounds per game</h3><p>Highest rebounding average</p></div></div><div id="rpg-leaders"></div></article>
       </div>
     </section>
 
     <section class="view" id="view-teams">
       <div class="section-heading"><div><p class="eyebrow">SIX TEAMS. ONE LEAGUE.</p><h2>Teams</h2></div></div>
       <div id="teams-grid" class="teams-grid"></div>
-      <section id="team-details" class="team-details" hidden>
+      <section id="team-details" class="team-details" tabindex="-1" hidden>
         <div class="section-heading"><div><p class="eyebrow">ROSTER &amp; SEASON STATISTICS</p><h2 id="roster-title"></h2></div></div>
         <div class="summary-grid"><article class="summary-card"><span class="summary-label">RECORD</span><strong id="roster-record"></strong></article><article class="summary-card"><span class="summary-label">PLAYERS</span><strong id="roster-count"></strong></article><article class="summary-card"><span class="summary-label">TEAM PPG</span><strong id="roster-ppg"></strong></article></div>
         <p id="roster-status" class="data-status error" role="status"></p>
@@ -101,6 +113,6 @@
   </dialog>
 
   <script src="config.js?v=teams1"></script>
-  <script src="app.js?v=teams1"></script>
+  <script src="app.js?v=records1"></script>
 </body>
 </html>

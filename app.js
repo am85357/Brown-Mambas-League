@@ -79,6 +79,10 @@ async function refreshVolunteers(){
   try{const r=await fetch(config.signupUrl,{cache:"no-store"});const data=await r.json();if(!data.ok)throw new Error();leagueData.games.forEach(g=>{if(data.games[g.game_id])Object.assign(g,data.games[g.game_id]);});}catch(e){console.warn("Could not refresh volunteer assignments",e);}
 }
 
+function scheduleRecord(name){
+  const team=leagueData.teams.find(t=>teamMatches(name,t));
+  return team ? ` <span class="schedule-record">(${safe(teamRecord(team).record)})</span>` : "";
+}
 function renderSchedule(){
   const configuredWeeks = Number(config.seasonWeeks) || 12;
   const weeks=[...new Set([
@@ -95,7 +99,7 @@ function renderSchedule(){
     const score=final?`${number(g.home_score)} – ${number(g.away_score)}`:"VS";
     return `<section class="game-with-volunteers"><article class="game-card" data-game="${safe(g.game_id)}" tabindex="0" role="button" aria-label="View ${safe(g.home_team)} versus ${safe(g.away_team)} box score">
       <div class="game-date"><strong>${safe(dateLabel(g.date))}</strong>${safe(g.time||"Time TBD")}</div>
-      <div class="matchup"><span class="team-name">${safe(g.home_team)}</span><span class="versus">VS</span><span class="team-name">${safe(g.away_team)}</span></div>
+      <div class="matchup"><span class="team-name">${safe(g.home_team)}${scheduleRecord(g.home_team)}</span><span class="versus">VS</span><span class="team-name">${safe(g.away_team)}${scheduleRecord(g.away_team)}</span></div>
       <div class="game-result"><strong>${safe(score)}</strong><span class="status-tag ${final?"":"upcoming"}">${safe(g.status||"Scheduled")}</span></div>
     </article>${volunteerForm(g)}</section>`;
   }).join(""):`<div class="empty-state">No games entered for this week yet.<br>Add games to the <strong>Games</strong> tab in your spreadsheet.</div>`;
@@ -110,12 +114,14 @@ function renderPlayers(){
   $("players-body").innerHTML=rows.length?rows.map(p=>`<tr><td>${safe(p.player)}</td><td>${safe(p.team)}</td><td class="num">${p.gp}</td><td class="num">${p.points}</td><td class="num">${p.rebounds}</td><td class="num">${p.ppg.toFixed(1)}</td><td class="num">${p.rpg.toFixed(1)}</td></tr>`).join(""):`<tr><td colspan="7">No player statistics yet.</td></tr>`;
 }
 function leaderRows(list,valueKey,suffix){
-  return list.slice(0,10).map((p,i)=>`<div class="leader-row"><span class="leader-rank">${String(i+1).padStart(2,"0")}</span><div><div class="leader-name">${safe(p.player)}</div><div class="leader-team">${safe(p.team)}</div></div><div class="leader-value">${valueKey==="points"?p.points:p.rebounds}<small style="font:600 9px Inter;color:#8391a0"> ${suffix}</small></div></div>`).join("")||`<div class="empty-state">Leaders will appear after stats are entered.</div>`;
+  return list.slice(0,10).map((p,i)=>`<div class="leader-row"><span class="leader-rank">${String(i+1).padStart(2,"0")}</span><div><div class="leader-name">${safe(p.player)}</div><div class="leader-team">${safe(p.team)}</div></div><div class="leader-value">${valueKey==="ppg"||valueKey==="rpg"?p[valueKey].toFixed(1):p[valueKey]}<small style="font:600 9px Inter;color:#8391a0"> ${suffix}</small></div></div>`).join("")||`<div class="empty-state">Leaders will appear after stats are entered.</div>`;
 }
 function renderLeaders(){
   const p=totals();
   $("points-leaders").innerHTML=leaderRows([...p].sort((a,b)=>b.points-a.points),"points","PTS");
   $("rebound-leaders").innerHTML=leaderRows([...p].sort((a,b)=>b.rebounds-a.rebounds),"rebounds","REB");
+  $("ppg-leaders").innerHTML=leaderRows([...p].filter(x=>x.gp>0).sort((a,b)=>b.ppg-a.ppg),"ppg","PPG");
+  $("rpg-leaders").innerHTML=leaderRows([...p].filter(x=>x.gp>0).sort((a,b)=>b.rpg-a.rpg),"rpg","RPG");
 }
 let selectedTeam = null;
 let rosterError = "";
@@ -134,13 +140,21 @@ function teamRoster(t){
   return [...map.values()].map(p=>({...p,gp:p.games.size,ppg:p.games.size?p.points/p.games.size:0,rpg:p.games.size?p.rebounds/p.games.size:0}));
 }
 function teamRecord(t){
-  let wins=0,losses=0,ties=0,points=0,gp=0;
+  let wins=0,losses=0,ties=0,points=0,against=0,gp=0;
   leagueData.games.filter(g=>normalized(g.status)==="final"&&String(g.home_score??"").trim()!==""&&String(g.away_score??"").trim()!=="").forEach(g=>{
     const home=teamMatches(g.home_team,t);if(!home&&!teamMatches(g.away_team,t))return;
     const own=number(home?g.home_score:g.away_score),other=number(home?g.away_score:g.home_score);
-    gp++;points+=own;if(own>other)wins++;else if(own<other)losses++;else ties++;
+    gp++;points+=own;against+=other;if(own>other)wins++;else if(own<other)losses++;else ties++;
   });
-  return {record:`${wins}–${losses}${ties?`–${ties}`:""}`,ppg:gp?points/gp:0};
+  return {wins,losses,ties,gp,points,against,diff:points-against,pct:gp?(wins+ties/2)/gp:0,record:`${wins}–${losses}${ties?`–${ties}`:""}`,ppg:gp?points/gp:0};
+}
+function renderStandings(){
+  const rows=leagueData.teams.map(t=>({t,...teamRecord(t)})).sort((a,b)=>b.pct-a.pct||b.diff-a.diff||a.t.team_name.localeCompare(b.t.team_name));
+  $("standings-body").innerHTML=rows.map((r,i)=>{
+    const color=/^#[0-9a-f]{6}$/i.test(r.t.color||"")?r.t.color:"#f28b36";
+    const diff=(r.diff>0?"+":"")+r.diff;
+    return `<tr><td>${i+1}</td><td><span class="team-dot" style="background:${color}"></span>${safe(r.t.team_name)}</td><td class="num">${r.gp}</td><td class="num">${r.wins}</td><td class="num">${r.losses}</td><td class="num">${r.ties}</td><td class="num">${r.gp?(r.pct*100).toFixed(1)+"%":"—"}</td><td class="num">${r.points}</td><td class="num">${r.against}</td><td class="num">${diff}</td></tr>`;
+  }).join("")||'<tr><td colspan="10">No teams entered yet.</td></tr>';
 }
 function renderTeams(){
   if(!leagueData.teams.some(t=>t.team_id===selectedTeam))selectedTeam=leagueData.teams[0]?.team_id??null;
@@ -149,7 +163,7 @@ function renderTeams(){
     const roster=teamRoster(t),record=teamRecord(t);
     return `<button type="button" class="team-card roster-card" data-team="${safe(t.team_id)}" aria-pressed="${t.team_id===selectedTeam}" aria-controls="team-details"><span class="roster-card-title"><span class="team-dot" style="background:${color}"></span>${safe(t.team_name)}</span><span>${roster.length} players · ${record.record} record</span><span class="roster-preview">${roster.map(p=>safe(p.player)+(p.captain?" (C)":"")).join(" · ")||"Roster not entered yet"}</span><span class="roster-link">View season stats →</span></button>`;
   }).join("")||`<div class="empty-state">Add your six teams to the Teams tab.</div>`;
-  document.querySelectorAll(".roster-card").forEach(btn=>btn.addEventListener("click",()=>{selectedTeam=btn.dataset.team;document.querySelectorAll(".roster-card").forEach(b=>b.setAttribute("aria-pressed",String(b===btn)));renderTeamDetails();}));
+  document.querySelectorAll(".roster-card").forEach(btn=>btn.addEventListener("click",()=>{selectedTeam=btn.dataset.team;document.querySelectorAll(".roster-card").forEach(b=>b.setAttribute("aria-pressed",String(b===btn)));renderTeamDetails();const panel=$("team-details");if(panel&&!panel.hidden){panel.scrollIntoView({behavior:"smooth",block:"start"});panel.focus({preventScroll:true});}}));
   renderTeamDetails();
 }
 function renderTeamDetails(){
@@ -198,7 +212,7 @@ async function init(){
     try{leagueData.rosters=await getSheet(config.rostersCsvUrl,[]);}catch(err){rosterError="Could not load Rosters. Showing players from recorded stats only.";}
   }else{rosterError="Rosters CSV not configured. Showing players from recorded stats only.";}
   await refreshVolunteers();
-  const players=totals();renderSummary(players);renderSchedule();renderPlayers();renderLeaders();renderTeams();
+  const players=totals();renderSummary(players);renderSchedule();renderPlayers();renderLeaders();renderTeams();renderStandings();
 }
 document.querySelectorAll(".nav-button").forEach(btn=>btn.addEventListener("click",()=>{
   document.querySelectorAll(".nav-button").forEach(b=>b.classList.toggle("active",b===btn));
